@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # 关键修改：使用 24.04，自带 GCC 14，完美支持 C++23
 
     steps:
       - name: Force HTTPS for submodules
@@ -18,18 +18,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Ensure submodules are checked out
-        run: |
-          echo "--- Submodule status ---"
-          git submodule status
-          git submodule update --init --recursive
-
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang python3 libvulkan-dev gcc-12 g++-12 libstdc++-12-dev
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+          sudo apt-get install -y ninja-build clang python3 libvulkan-dev
 
       - name: Initialize glslang dependencies
         run: |
