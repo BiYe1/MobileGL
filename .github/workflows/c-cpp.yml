@@ -1,6 +1,89 @@
 name: Build .so Library
 
 on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Force HTTPS for submodules
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # 新增：确保子模块真正检出（如果递归没生效就手动）
+      - name: Ensure submodules are checked out
+        run: |
+          echo "--- .gitmodules content ---"
+          cat .gitmodules 2>/dev/null || echo "No .gitmodules file"
+          echo "--- Submodule status ---"
+          git submodule status
+          echo "--- Trying to update submodules ---"
+          git submodule update --init --recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang python3 libvulkan-dev
+
+      # 修复后的 glslang 初始化：排除 .git 目录
+      - name: Initialize glslang dependencies
+        run: |
+          # 在仓库所有地方找 glslang，但忽略 .git 目录
+          GLSLANG_DIR=$(find . -type d -name "glslang" -not -path "./.git/*" | head -n 1)
+          if [ -z "$GLSLANG_DIR" ]; then
+            echo "ERROR: Could not find glslang working tree."
+            echo "Top-level:"
+            ls -la
+            if [ -d "3rdparty" ]; then
+              echo "3rdparty contents:"
+              ls -la 3rdparty
+            fi
+            if [ -d "third_party" ]; then
+              echo "third_party contents:"
+              ls -la third_party
+            fi
+            exit 1
+          fi
+          echo "Found glslang working tree at: $GLSLANG_DIR"
+          cd "$GLSLANG_DIR"
+          if [ ! -f "update_glslang_sources.py" ]; then
+            echo "Script update_glslang_sources.py not found inside glslang directory."
+            ls -la
+            exit 1
+          fi
+          python3 update_glslang_sources.py
+
+      - name: Configure CMake
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=ON
+          -DMOBILEGL_BUILD_TEST=OFF
+          -DMOBILEGL_BUILD_BENCHMARK=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Show built .so files
+        run: find build -name "*.so" -exec ls -lh {} \;
+
+      - name: Upload .so artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobilegl-linux-x64-shared
+          path: build/*.soname: Build .so Library
+
+on:
   workflow_dispatch:   # 手动触发（在 Actions 页面点 "Run workflow"）
   push:
     branches: [ "main" ]  # 如果你希望 push 到 main 时自动构建，保留这行
