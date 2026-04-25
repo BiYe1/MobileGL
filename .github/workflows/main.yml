@@ -72,13 +72,13 @@ jobs:
     -DBUILD_SHARED_LIBS=ON
     -DMOBILEGL_BUILD_TEST=OFF
     -DMOBILEGL_BUILD_BENCHMARK=OFF
-      - name: Build
+- name: Build
         run: cmake --build build --parallel
 
-      - name: Show built .so files
+- name: Show built .so files
         run: find build -name "*.so" -exec ls -lh {} \;
 
-      - name: Upload .so artifact
+- name: Upload .so artifact
         uses: actions/upload-artifact@v4
         with:
           name: mobilegl-linux-x64-shared
