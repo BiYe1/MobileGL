@@ -1,44 +1,68 @@
-name: Build MobileGL
+name: Build .so Library
 
 on:
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:   # 手动触发（在 Actions 页面点 "Run workflow"）
+  push:
+    branches: [ "main" ]  # 如果你希望 push 到 main 时自动构建，保留这行
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. 强制子模块使用 HTTPS，避免 SSH 权限错误
       - name: Force HTTPS for submodules
         run: git config --global url."https://github.com/".insteadOf "git@github.com:"
 
+      # 2. 拉取仓库及所有子模块
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # 3. 安装编译依赖
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build clang python3 libvulkan-dev
 
+      # 4. 初始化 glslang（自动查找目录并执行脚本）
       - name: Initialize glslang dependencies
         run: |
-          GLSLANG_DIR=$(find . -maxdepth 3 -type d -name "glslang" | head -n 1)
+          GLSLANG_DIR=$(find . -maxdepth 4 -type d -name "glslang" | head -n 1)
           if [ -z "$GLSLANG_DIR" ]; then
             echo "ERROR: Could not find glslang directory."
+            echo "Repository root structure:"
+            ls -la
             exit 1
           fi
           echo "Found glslang at: $GLSLANG_DIR"
           cd "$GLSLANG_DIR"
+          # 如果脚本需要参数，按 glslang 官方文档可能需要运行：
           python3 update_glslang_sources.py
 
-      - name: Configure CMake (Clang + Ninja)
+      # 5. CMake 配置（只构建库，不开测试/基准测试）
+      - name: Configure CMake
         run: >
           cmake -S . -B build -G Ninja
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=ON
           -DMOBILEGL_BUILD_TEST=OFF
           -DMOBILEGL_BUILD_BENCHMARK=OFF
 
+      # 6. 编译
       - name: Build
-        run: cmake --build build
+        run: cmake --build build --parallel
+
+      # 7. 列出生成的 .so 文件（用于调试）
+      - name: Show built shared libraries
+        run: find build -name "*.so" -exec ls -lh {} \;
+
+      # 8. 将 .so 文件上传为构建产物
+      - name: Upload .so artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobilegl-linux-x64-shared
+          path: build/*.so   # 匹配所有 .so 文件，也可指定具体名称如 build/libMobileGL.so
