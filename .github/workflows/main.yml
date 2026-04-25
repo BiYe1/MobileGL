@@ -1,4 +1,4 @@
-name: Build .so Library (Clang 20)
+name: Build .so Library
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04          # 关键！ 24.04 自带 GCC 14，完美兼容 C++23
 
     steps:
       - name: Force HTTPS for submodules
@@ -18,17 +18,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Clang 20 and libc++ 20
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build python3 libvulkan-dev
-          # 和官方 benchmark 完全一致的 Clang 20 工具链
-          sudo apt-get install -y clang-20 clang++-20 lld-20 libc++-20-dev libc++abi-20-dev
-
-      - name: Show toolchain versions
-        run: |
-          clang-20 --version
-          clang++-20 --version
+          sudo apt-get install -y ninja-build clang python3 libvulkan-dev
 
       - name: Initialize glslang dependencies
         run: |
@@ -44,9 +37,8 @@ jobs:
       - name: Configure CMake
         run: >
           cmake -S . -B build -G Ninja
-          -DCMAKE_C_COMPILER=clang-20
-          -DCMAKE_CXX_COMPILER=clang++-20
-          -DCMAKE_CXX_FLAGS="-stdlib=libc++ -D_GNU_SOURCE"
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
           -DCMAKE_BUILD_TYPE=Release
           -DBUILD_SHARED_LIBS=ON
           -DMOBILEGL_BUILD_TEST=OFF
