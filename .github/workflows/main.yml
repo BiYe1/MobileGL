@@ -20,55 +20,37 @@ jobs:
 
       - name: Ensure submodules are checked out
         run: |
-          echo "--- .gitmodules content ---"
-          cat .gitmodules 2>/dev/null || echo "No .gitmodules file"
           echo "--- Submodule status ---"
           git submodule status
-          echo "--- Trying to update submodules ---"
           git submodule update --init --recursive
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang python3 libvulkan-dev libc++-dev libc++abi-dev
+          sudo apt-get install -y ninja-build clang python3 libvulkan-dev gcc-12 g++-12 libstdc++-12-dev
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
 
       - name: Initialize glslang dependencies
         run: |
           GLSLANG_DIR=$(find . -type d -name "glslang" -not -path "./.git/*" | head -n 1)
           if [ -z "$GLSLANG_DIR" ]; then
-            echo "ERROR: Could not find glslang working tree."
-            echo "Top-level:"
-            ls -la
-            if [ -d "3rdparty" ]; then
-              echo "3rdparty contents:"
-              ls -la 3rdparty
-            fi
-            if [ -d "third_party" ]; then
-              echo "third_party contents:"
-              ls -la third_party
-            fi
+            echo "ERROR: Could not find glslang directory."
             exit 1
           fi
-          echo "Found glslang working tree at: $GLSLANG_DIR"
+          echo "Found glslang at: $GLSLANG_DIR"
           cd "$GLSLANG_DIR"
-          if [ ! -f "update_glslang_sources.py" ]; then
-            echo "Script update_glslang_sources.py not found inside glslang directory."
-            ls -la
-            exit 1
-          fi
           python3 update_glslang_sources.py
 
       - name: Configure CMake
-        run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
-            -DCMAKE_CXX_STANDARD=23 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=ON \
-            -DMOBILEGL_BUILD_TEST=OFF \
-            -DMOBILEGL_BUILD_BENCHMARK=OFF
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=ON
+          -DMOBILEGL_BUILD_TEST=OFF
+          -DMOBILEGL_BUILD_BENCHMARK=OFF
 
       - name: Build
         run: cmake --build build --parallel
