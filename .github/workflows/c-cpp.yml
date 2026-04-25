@@ -1,0 +1,40 @@
+name: Build MobileGL
+
+on:
+  push:
+    branches: [ "dev" ]
+  pull_request:
+    branches: [ "dev" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang python3 libvulkan-dev
+
+      - name: Initialize glslang dependencies
+        working-directory: ${{github.workspace}}/third_party/glslang
+        run: python3 update_glslang_sources.py
+
+      - name: Configure CMake (Clang + Ninja)
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DMOBILEGL_BUILD_TEST=ON
+          -DMOBILEGL_BUILD_BENCHMARK=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests (optional)
+        run: cd build && ctest --output-on-failure
