@@ -28,10 +28,10 @@ jobs:
           echo "--- Trying to update submodules ---"
           git submodule update --init --recursive
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build clang python3 libvulkan-dev
+- name: Install system dependencies
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y ninja-build clang python3 libvulkan-dev libc++-dev libc++abi-dev
 
       # 修复后的 glslang 初始化：排除 .git 目录
       - name: Initialize glslang dependencies
@@ -61,16 +61,17 @@ jobs:
           fi
           python3 update_glslang_sources.py
 
-      - name: Configure CMake
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_C_COMPILER=clang
-          -DCMAKE_CXX_COMPILER=clang++
-          -DCMAKE_BUILD_TYPE=Release
-          -DBUILD_SHARED_LIBS=ON
-          -DMOBILEGL_BUILD_TEST=OFF
-          -DMOBILEGL_BUILD_BENCHMARK=OFF
-
+- name: Configure CMake
+  run: >
+    cmake -S . -B build -G Ninja
+    -DCMAKE_C_COMPILER=clang
+    -DCMAKE_CXX_COMPILER=clang++
+    -DCMAKE_CXX_FLAGS="-stdlib=libc++"
+    -DCMAKE_CXX_STANDARD=23
+    -DCMAKE_BUILD_TYPE=Release
+    -DBUILD_SHARED_LIBS=ON
+    -DMOBILEGL_BUILD_TEST=OFF
+    -DMOBILEGL_BUILD_BENCHMARK=OFF
       - name: Build
         run: cmake --build build --parallel
 
