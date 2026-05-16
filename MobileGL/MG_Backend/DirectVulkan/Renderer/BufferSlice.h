@@ -1,4 +1,4 @@
-// MobileGL - MobileGL/MG_Backend/DirectVulkan/Renderer/VulkanRendererConfig.h
+// MobileGL - MobileGL/MG_Backend/DirectVulkan/Renderer/BufferSlice.h
 // Copyright (c) 2025-2026 MobileGL-Dev
 // Licensed under the GNU Lesser General Public License v3.0:
 //   https://www.gnu.org/licenses/gpl-3.0.txt
@@ -7,14 +7,17 @@
 // End of Source File Header
 
 #pragma once
-#include "Config.h"
+
+#include "../VkIncludes.h"
+#include <Includes.h>
 
 namespace MobileGL::MG_Backend::DirectVulkan {
-    struct VulkanRendererConfig {
-        Uint32 MaxFramesInFlight = 2;
-        String AppName = "MobileGL-VulkanRenderer";
-        MobileGL::Version Version = MG_Config::CoreVersion;
-        Uint64 CacheVersion = MG_Config::CacheVersion;
-        Bool EnableValidationLayers = true;
+    struct BufferSlice {
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VkDeviceSize offset = 0;
+        VkDeviceSize size = 0;
+        void* mapped = nullptr;
+
+        Bool IsValid() const { return buffer != VK_NULL_HANDLE; }
     };
 } // namespace MobileGL::MG_Backend::DirectVulkan
