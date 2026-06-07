@@ -41,16 +41,19 @@ namespace MobileGL::MG_Backend::DirectVulkan {
     const VertexInputStateFactory::BackendVertexInputState& VertexInputStateFactory::GetOrCreateVertexInputState(
         const MG_State::GLState::VertexArrayObject& vao) {
         const HashType hash = ComputeHash(vao);
+        return GetOrCreateVertexInputState(vao, hash);
+    }
+
+    const VertexInputStateFactory::BackendVertexInputState& VertexInputStateFactory::GetOrCreateVertexInputState(
+        const MG_State::GLState::VertexArrayObject& vao, HashType hash) {
         auto it = m_cache.find(hash);
         if (it != m_cache.end()) {
             return it->second;
         }
 
         VertexInputStateBuilder builder;
-        UnorderedMap<SizeT, Uint32> bindingByBufferKey;
-        UnorderedMap<SizeT, Uint32> strideByBufferKey;
-        UnorderedMap<SizeT, VkVertexInputRate> inputRateByBufferKey;
         Vector<SizeT> bindingBufferKeys;
+        Vector<SizeT> bindingBaseOffsets;
 
         for (Uint32 location = 0; location < MG_State::GLState::VertexArrayObject::MAX_VERTEX_ATTRIBS; ++location) {
             const auto& attr = vao.GetAttribute(location);
@@ -79,29 +82,11 @@ namespace MobileGL::MG_Backend::DirectVulkan {
                 (attr.Divisor == 0) ? VK_VERTEX_INPUT_RATE_VERTEX : VK_VERTEX_INPUT_RATE_INSTANCE;
 
             const SizeT bufferKey = reinterpret_cast<SizeT>(attr.Buffer.get());
-            Uint32 binding = 0;
-            auto itBinding = bindingByBufferKey.find(bufferKey);
-            if (itBinding == bindingByBufferKey.end()) {
-                binding = static_cast<Uint32>(bindingByBufferKey.size());
-                bindingByBufferKey.emplace(bufferKey, binding);
-                strideByBufferKey.emplace(bufferKey, stride);
-                inputRateByBufferKey.emplace(bufferKey, inputRate);
-                bindingBufferKeys.push_back(bufferKey);
-                builder.AddBinding(binding, stride, inputRate);
-            } else {
-                binding = itBinding->second;
-                if (strideByBufferKey[bufferKey] != stride) {
-                    MGLOG_D("Skipping vertex attribute at location %u: stride mismatch (%u vs %u) on same buffer",
-                            location, stride, strideByBufferKey[bufferKey]);
-                    continue;
-                }
-                if (inputRateByBufferKey[bufferKey] != inputRate) {
-                    MGLOG_D("Skipping vertex attribute at location %u: input-rate mismatch on same buffer", location);
-                    continue;
-                }
-            }
-
-            builder.AddAttribute(location, binding, vkFormat, static_cast<Uint32>(attr.Offset));
+            const Uint32 binding = static_cast<Uint32>(bindingBufferKeys.size());
+            bindingBufferKeys.push_back(bufferKey);
+            bindingBaseOffsets.push_back(attr.Offset);
+            builder.AddBinding(binding, stride, inputRate);
+            builder.AddAttribute(location, binding, vkFormat, 0);
         }
 
         const auto& state = builder.Build();
@@ -111,6 +96,7 @@ namespace MobileGL::MG_Backend::DirectVulkan {
         entry.bindings = builder.GetBindings();
         entry.attributes = builder.GetAttributes();
         entry.bindingBufferKeys = std::move(bindingBufferKeys);
+        entry.bindingBaseOffsets = std::move(bindingBaseOffsets);
         entry.state = state;
         entry.state.pVertexBindingDescriptions = entry.bindings.empty() ? nullptr : entry.bindings.data();
         entry.state.pVertexAttributeDescriptions = entry.attributes.empty() ? nullptr : entry.attributes.data();
@@ -148,49 +134,61 @@ namespace MobileGL::MG_Backend::DirectVulkan {
         case DataType::Int16:
             switch (size) {
             case 1:
-                return isInteger ? VK_FORMAT_R16_SINT : VK_FORMAT_R16_SNORM;
+                return isInteger ? VK_FORMAT_R16_SINT : (normalized ? VK_FORMAT_R16_SNORM : VK_FORMAT_R16_SSCALED);
             case 2:
-                return isInteger ? VK_FORMAT_R16G16_SINT : VK_FORMAT_R16G16_SNORM;
+                return isInteger ? VK_FORMAT_R16G16_SINT
+                                 : (normalized ? VK_FORMAT_R16G16_SNORM : VK_FORMAT_R16G16_SSCALED);
             case 3:
-                return isInteger ? VK_FORMAT_R16G16B16_SINT : VK_FORMAT_R16G16B16_SNORM;
+                return isInteger ? VK_FORMAT_R16G16B16_SINT
+                                 : (normalized ? VK_FORMAT_R16G16B16_SNORM : VK_FORMAT_R16G16B16_SSCALED);
             case 4:
-                return isInteger ? VK_FORMAT_R16G16B16A16_SINT : VK_FORMAT_R16G16B16A16_SNORM;
+                return isInteger ? VK_FORMAT_R16G16B16A16_SINT
+                                 : (normalized ? VK_FORMAT_R16G16B16A16_SNORM : VK_FORMAT_R16G16B16A16_SSCALED);
             default: return VK_FORMAT_UNDEFINED;
             }
         case DataType::Uint16:
             switch (size) {
             case 1:
-                return isInteger ? VK_FORMAT_R16_UINT : VK_FORMAT_R16_UNORM;
+                return isInteger ? VK_FORMAT_R16_UINT : (normalized ? VK_FORMAT_R16_UNORM : VK_FORMAT_R16_USCALED);
             case 2:
-                return isInteger ? VK_FORMAT_R16G16_UINT : VK_FORMAT_R16G16_UNORM;
+                return isInteger ? VK_FORMAT_R16G16_UINT
+                                 : (normalized ? VK_FORMAT_R16G16_UNORM : VK_FORMAT_R16G16_USCALED);
             case 3:
-                return isInteger ? VK_FORMAT_R16G16B16_UINT : VK_FORMAT_R16G16B16_UNORM;
+                return isInteger ? VK_FORMAT_R16G16B16_UINT
+                                 : (normalized ? VK_FORMAT_R16G16B16_UNORM : VK_FORMAT_R16G16B16_USCALED);
             case 4:
-                return isInteger ? VK_FORMAT_R16G16B16A16_UINT : VK_FORMAT_R16G16B16A16_UNORM;
+                return isInteger ? VK_FORMAT_R16G16B16A16_UINT
+                                 : (normalized ? VK_FORMAT_R16G16B16A16_UNORM : VK_FORMAT_R16G16B16A16_USCALED);
             default: return VK_FORMAT_UNDEFINED;
             }
         case DataType::Int8:
             switch (size) {
             case 1:
-                return isInteger ? VK_FORMAT_R8_SINT : VK_FORMAT_R8_SNORM;
+                return isInteger ? VK_FORMAT_R8_SINT : (normalized ? VK_FORMAT_R8_SNORM : VK_FORMAT_R8_SSCALED);
             case 2:
-                return isInteger ? VK_FORMAT_R8G8_SINT : VK_FORMAT_R8G8_SNORM;
+                return isInteger ? VK_FORMAT_R8G8_SINT
+                                 : (normalized ? VK_FORMAT_R8G8_SNORM : VK_FORMAT_R8G8_SSCALED);
             case 3:
-                return isInteger ? VK_FORMAT_R8G8B8_SINT : VK_FORMAT_R8G8B8_SNORM;
+                return isInteger ? VK_FORMAT_R8G8B8_SINT
+                                 : (normalized ? VK_FORMAT_R8G8B8_SNORM : VK_FORMAT_R8G8B8_SSCALED);
             case 4:
-                return isInteger ? VK_FORMAT_R8G8B8A8_SINT : VK_FORMAT_R8G8B8A8_SNORM;
+                return isInteger ? VK_FORMAT_R8G8B8A8_SINT
+                                 : (normalized ? VK_FORMAT_R8G8B8A8_SNORM : VK_FORMAT_R8G8B8A8_SSCALED);
             default: return VK_FORMAT_UNDEFINED;
             }
         case DataType::Uint8:
             switch (size) {
             case 1:
-                return isInteger ? VK_FORMAT_R8_UINT : VK_FORMAT_R8_UNORM;
+                return isInteger ? VK_FORMAT_R8_UINT : (normalized ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8_USCALED);
             case 2:
-                return isInteger ? VK_FORMAT_R8G8_UINT : VK_FORMAT_R8G8_UNORM;
+                return isInteger ? VK_FORMAT_R8G8_UINT
+                                 : (normalized ? VK_FORMAT_R8G8_UNORM : VK_FORMAT_R8G8_USCALED);
             case 3:
-                return isInteger ? VK_FORMAT_R8G8B8_UINT : VK_FORMAT_R8G8B8_UNORM;
+                return isInteger ? VK_FORMAT_R8G8B8_UINT
+                                 : (normalized ? VK_FORMAT_R8G8B8_UNORM : VK_FORMAT_R8G8B8_USCALED);
             case 4:
-                return isInteger ? VK_FORMAT_R8G8B8A8_UINT : VK_FORMAT_R8G8B8A8_UNORM;
+                return isInteger ? VK_FORMAT_R8G8B8A8_UINT
+                                 : (normalized ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8G8B8A8_USCALED);
             default: return VK_FORMAT_UNDEFINED;
             }
         default:
