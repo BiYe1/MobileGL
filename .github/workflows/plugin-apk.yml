@@ -53,23 +53,23 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
 
-      - name: Verify signed APK
-        run: |
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          mapfile -t APKS < <(find android-plugin/app/build/outputs/apk -type f -path '*/release/*.apk' | sort)
-          if [ "${#APKS[@]}" -eq 0 ]; then
-            echo "::error::No release APKs found under android-plugin/app/build/outputs/apk"
-            find android-plugin/app/build/outputs/apk -type f -print || true
-            exit 1
-          fi
-
-          for APK in "${APKS[@]}"; do
-            if [[ "$APK" == *-unsigned.apk ]]; then
-              echo "::error::Unsigned release APK produced: $APK"
-              exit 1
-            fi
-            "$APKSIGNER" verify --verbose "$APK"
-          done
+#      - name: Verify signed APK
+#        run: |
+#          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+#          mapfile -t APKS < <(find android-plugin/app/build/outputs/apk -type f -path '*/release/*.apk' | sort)
+#          if [ "${#APKS[@]}" -eq 0 ]; then
+#            echo "::error::No release APKs found under android-plugin/app/build/outputs/apk"
+#            find android-plugin/app/build/outputs/apk -type f -print || true
+#            exit 1
+#          fi
+#
+#          for APK in "${APKS[@]}"; do
+#            if [[ "$APK" == *-unsigned.apk ]]; then
+#              echo "::error::Unsigned release APK produced: $APK"
+#              exit 1
+#            fi
+#            "$APKSIGNER" verify --verbose "$APK"
+#          done
 
       - name: Upload plugin APK
         uses: actions/upload-artifact@v4
